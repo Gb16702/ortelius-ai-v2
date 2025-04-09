@@ -11,7 +11,6 @@ class PromptService:
     @staticmethod
     def create_chat_prompt(
         query: str,
-        chat_history: Optional[List[Dict[str, str]]] = None,
         system_prompt: Optional[str] = None,
         additional_context: str = "",
         specialized_knowledge: str = ""
@@ -26,9 +25,6 @@ class PromptService:
                 specialized_knowledge=specialized_knowledge
             )
             messages.append({"role": "system", "content": default_system})
-
-        if chat_history:
-            messages.extend(chat_history)
 
         messages.append({"role": "user", "content": query})
 
