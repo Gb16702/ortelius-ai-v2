@@ -29,7 +29,6 @@ app = FastAPI(
 )
 
 logfire.instrument_fastapi(app, capture_headers=True)
-
 logfire.instrument_httpx(capture_all=True)
 
 app.add_middleware(
@@ -47,4 +46,3 @@ async def root():
     return {
         "status": "Running"
     }
-

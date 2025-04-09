@@ -3,10 +3,13 @@ import logfire
 from typing import AsyncGenerator, List, Dict, Any
 from openai import AsyncOpenAI
 from pydantic_ai import Agent
+from fastapi import HTTPException, status
 
 from app.core.config import settings
 from app.utils.prompt_templates import create_system_prompt, FALLBACK_RESPONSE
 from app.models.chat import ChatCompletionRequest, ChatCompletionResponse
+from app.services.language_service import LanguageService
+from pydantic import ValidationError
 
 class ChatService:
     def __init__(self):
@@ -14,18 +17,47 @@ class ChatService:
         self.agent = Agent(f"openai:{settings.CHAT_MODEL}")
 
     def _ensure_system_message(self, messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        user_prompt = next((message.get("content", '') for message in reversed(messages) if message.get("role") == "user"), '')
+        if not user_prompt or not user_prompt.strip():
+            ERROR_MESSAGE = "The prompt cannot be empty"
+            logfire.error(ERROR_MESSAGE)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=ERROR_MESSAGE
+            )
+
+        detected_language, _ = LanguageService.detect_language(user_prompt)
+        system_prompt = create_system_prompt()
+
+        if detected_language != "en":
+            instructions = f"The user is speaking in {detected_language}. ALWAYS respond in the same language as the user."
+            system_prompt = f"{instructions}\n\n{system_prompt}"
+
         if not any(message.get("role") == "system" for message in messages):
-            messages.insert(0, {"role": "system", "content": create_system_prompt()})
+            messages.insert(0, {"role": "system", "content": system_prompt})
+
         return messages
 
     async def get_chat_completion(self, request: ChatCompletionRequest) -> ChatCompletionResponse:
         try:
             messages = self._ensure_system_message(request.messages)
 
-            response = await self.agent.run(
-                messages=messages,
-                temperature=request.temperature,
-                max_tokens=request.max_tokens,
+            user_prompt = next((message.get("content", '') for message in reversed(messages) if message.get("role") == "user"), '')
+            system_message = next((message.get("content", '') for message in messages if message.get("role") == "system"), '')
+
+            model_settings = {
+                "temperature": request.temperature,
+                "max_tokens": request.max_tokens,
+            }
+
+            temp_agent = Agent(
+                f"openai:{settings.CHAT_MODEL}",
+                system_prompt=system_message
+            )
+
+            response = await temp_agent.run(
+                user_prompt=user_prompt,
+                model_settings=model_settings,
             )
 
             logfire.info("Chat completion response",
@@ -38,6 +70,15 @@ class ChatService:
                 usage=None
             )
 
+        except ValidationError as e:
+            logfire.error(f"Validation error: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=e.errors()
+            )
+
+        except HTTPException:
+            raise
         except Exception as e:
             logfire.error(f"Error in chat completion: {str(e)}")
 
@@ -57,6 +98,8 @@ class ChatService:
 
             embedding = embedding_response.data[0].embedding
 
+            return None
+
         except Exception as e:
             logfire.error(f"Error in getting RAG context: {str(e)}")
             return None
@@ -64,6 +107,7 @@ class ChatService:
     async def get_streaming_chat_completion(self, request: ChatCompletionRequest) -> AsyncGenerator[str, None]:
         try:
             messages = self._ensure_system_message(request.messages)
+
             if request.is_rag_enabled:
                 user_query = next((message.get("content", '') for message in reversed(request.messages) if message.get("role") == "user"), '')
 
@@ -75,10 +119,28 @@ class ChatService:
                         "content": f"Context{ctx}"
                     })
 
-            async for chunk in self.agent.stream(messages=messages, temperature=request.temperature, max_tokens=request.max_tokens):
-                if chunk and hasattr(chunk, "data"):
-                    yield chunk.data
+            user_prompt = next((message.get("content", '') for message in reversed(messages) if message.get("role") == "user"), '')
+            system_message = next((message.get("content", '') for message in messages if message.get("role") == "system"), '')
 
+            model_settings = {
+                "temperature": request.temperature,
+                "max_tokens": request.max_tokens,
+            }
+
+            temp_agent = Agent(
+                f"openai:{settings.CHAT_MODEL}",
+                system_prompt=system_message
+            )
+
+            async with temp_agent.run_stream(
+                user_prompt=user_prompt,
+                model_settings=model_settings,
+            ) as streamed_response:
+                async for text in streamed_response.stream_text():
+                    yield text
+
+        except HTTPException:
+            raise
         except Exception as e:
             logfire.error(f"Error in streaming chat completion: {str(e)}")
             yield FALLBACK_RESPONSE
