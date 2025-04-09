@@ -1,11 +1,15 @@
 import logfire
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from contextlib import asynccontextmanager
+from fastapi.exceptions import RequestValidationError
+
 
 from app.api.v1.endpoints import chat
 from app.core.config import settings
+from app.utils.errors_handler import ErrorHandler
 
 logfire.configure(
     token=settings.LOGFIRE_TOKEN,
@@ -27,6 +31,8 @@ app = FastAPI(
     title="AI Chatbot",
     lifespan=lifespan
 )
+
+ErrorHandler(app)
 
 logfire.instrument_fastapi(app, capture_headers=True)
 logfire.instrument_httpx(capture_all=True)
