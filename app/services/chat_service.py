@@ -7,7 +7,7 @@ from fastapi import HTTPException, status
 
 from app.core.config import settings
 from app.utils.prompt_templates import create_system_prompt, ERROR_RESPONSE
-from app.models.chat import ChatCompletionRequest, ChatCompletionResponse, ChatMessage
+from app.models.message import CompletionRequest, CompletionResponse, Message
 from app.services.language_service import LanguageService
 from pydantic import ValidationError
 
@@ -16,10 +16,10 @@ class ChatService:
         self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
         self.agent = Agent(f"openai:{settings.CHAT_MODEL}")
 
-    def _extract_user_prompt(self, messages: List[ChatMessage]) -> ChatMessage:
+    def _extract_user_prompt(self, messages: List[Message]) -> Message:
         return next((message for message in reversed(messages) if message.role == "user"), None)
 
-    def _ensure_system_message(self, messages: List[ChatMessage]) -> List[ChatMessage]:
+    def _ensure_system_message(self, messages: List[Message]) -> List[Message]:
         detected_language, _ = LanguageService.detect_language(self._extract_user_prompt(messages).content)
         system_prompt = create_system_prompt()
 
@@ -28,12 +28,12 @@ class ChatService:
             system_prompt = f"{instructions}\n\n{system_prompt}"
 
         if not any(message.role == "system" for message in messages):
-            system_message = ChatMessage(role="system", content=system_prompt)
+            system_message = Message(role="system", content=system_prompt)
             return [system_message] + messages
 
         return messages
 
-    async def get_chat_completion(self, request: ChatCompletionRequest) -> ChatCompletionResponse:
+    async def get_chat_completion(self, request: CompletionRequest) -> CompletionResponse:
         try:
             messages = self._ensure_system_message(request.messages)
 
@@ -60,8 +60,8 @@ class ChatService:
                         temperature=request.temperature,
                         max_tokens=request.max_tokens)
 
-            return ChatCompletionResponse(
-                message=ChatMessage(role="assistant", content=response.data),
+            return CompletionResponse(
+                message=Message(role="assistant", content=response.data),
                 usage=None
             )
 
@@ -77,7 +77,7 @@ class ChatService:
         except Exception as e:
             logfire.error(f"Error in chat completion: {str(e)}")
 
-            return ChatCompletionResponse(
-                message=ChatMessage(role="assistant", content=ERROR_RESPONSE),
+            return CompletionResponse(
+                message=Message(role="assistant", content=ERROR_RESPONSE),
                 usage=None
             )

@@ -4,7 +4,7 @@ from datetime import datetime
 from pydantic import field_validator
 from pydantic_core import PydanticCustomError
 
-class ChatMessage(BaseModel):
+class Message(BaseModel):
     class Config:
         extra = "forbid"
         validate_assignment = True
@@ -48,12 +48,12 @@ class ChatMessage(BaseModel):
             )
         return v
 
-class ChatCompletionRequest(BaseModel):
-    messages: List[ChatMessage] = Field(..., description="List of messages of the conversation")
+class CompletionRequest(BaseModel):
+    messages: List[Message] = Field(..., description="List of messages of the conversation")
     temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="Temperature of the model")
     max_tokens: int = Field(default=1000, gt=0, description="Maximum number of tokens in the response")
     is_rag_enabled: bool = Field(default=False, description="Whether RAG is enabled")
 
-class ChatCompletionResponse(BaseModel):
-    message: ChatMessage
+class CompletionResponse(BaseModel):
+    message: Message
     usage: Optional[Dict[str, Any]] = None
