@@ -1,11 +1,6 @@
-import json
-
-from typing import List, Dict, Any, Optional
-from fastapi import APIRouter, HTTPException, status, Body
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter
 
 from app.services.chat_service import ChatService
-from app.services.prompt_service import PromptService
 from app.models.chat import ChatCompletionRequest
 
 router = APIRouter(tags=["chat"])

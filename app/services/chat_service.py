@@ -1,6 +1,6 @@
 import logfire
 
-from typing import AsyncGenerator, List, Dict, Any
+from typing import List
 from openai import AsyncOpenAI
 from pydantic_ai import Agent
 from fastapi import HTTPException, status

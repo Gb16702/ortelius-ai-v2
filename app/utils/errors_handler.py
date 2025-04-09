@@ -1,7 +1,8 @@
+import logfire
+
 from fastapi import Request, FastAPI, status
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
-import logfire
 
 class ErrorHandler:
     def __init__(self, app: FastAPI):

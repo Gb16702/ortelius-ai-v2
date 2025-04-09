@@ -1,4 +1,5 @@
 import logfire
+
 from langdetect import detect, LangDetectException
 from typing import Tuple
 
